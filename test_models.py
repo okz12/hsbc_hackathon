@@ -202,13 +202,13 @@ for y in y_test:
 
 nn_y_test = np.array(nn_y_test)
 
-lstm_shape = (len(X_train[0]),lookback)
+lstm_shape = (lookback+1,len(X_train[0]))
 lstm_model = build_lstm_model(lstm_shape)
 
 print("Training Model")
-train_pred_model(lstm_model,lstm_train,nn_y_train,lstm_test,nn_y_test,batch_size=1,epochs=5,verbose=2)
+train_pred_model(lstm_model,lstm_train[lookback:],nn_y_train[lookback:],lstm_test[lookback:],nn_y_test[lookback:],batch_size=1,epochs=5,verbose=1)
 
-
+evaluate_model(lstm_model,lstm_test[lookback:],nn_y_test[lookback:])
 '''
 
 basic_nn_model = build_pred_model(input_shape=len(X_train[0]))

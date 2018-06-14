@@ -35,7 +35,7 @@ def build_pred_model(input_shape,loss_weights=None):
 def build_lstm_model(input_shape):
 	# create and fit the LSTM network
 	model = Sequential()
-	model.add(LSTM(16, input_shape=input_shape))
+	model.add(LSTM(16, activation='tanh', input_shape=input_shape))
 	model.add(Dense(8, activation='relu'))
 	model.add(Dense(2,activation='softmax'))
 	model.compile(loss='categorical_crossentropy', optimizer='adam')
@@ -46,7 +46,7 @@ def train_pred_model(model, x_train, y_train, x_test, y_test, batch_size=128, ep
 	model.fit(x_train, y_train,
 			  batch_size=batch_size,
 			  epochs=epochs,
-			  verbose=verbose,)
+			  verbose=verbose)
 			  #validation_data=(x_test, y_test))
 	return model
 
