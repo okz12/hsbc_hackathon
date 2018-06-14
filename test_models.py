@@ -148,9 +148,9 @@ y_test = np.array(prices_delta_clean[OUT]['nextMidVariation'].values)
 
 
 
-y_train[y_train<0] = 0
+y_train[y_train<0] = -1
 y_train[y_train>0] = 1
-y_test[y_test<0] = 0
+y_test[y_test<0] = -1
 y_test[y_test>0] = 1
 
 
@@ -165,14 +165,24 @@ from base_nn import *
 
 np.random.seed(437)
 
-#clf = DecisionTreeClassifier()
+clf = LogisticRegression()
 
-#clf.fit(sparse.csr_matrix(X_train), y_train)
-#predictions = clf.predict(sparse.csr_matrix(X_test))
+clf.fit(sparse.csr_matrix(X_train), y_train)
+predictions = clf.predict(sparse.csr_matrix(X_test))
 
 
-#print(metrics.accuracy_score(y_test, predictions))
-#print(metrics.classification_report(y_test, predictions))
+print(metrics.accuracy_score(y_test, predictions))
+print(metrics.classification_report(y_test, predictions))
+
+
+#nn shenanigans
+import build_time_data
+
+lookback = 20
+lstm_train = build_time_data.construct_time_series_inputs(X_train,lookback=lookback)
+lstm_test = build_time_data.construct_time_series_inputs(X_test,lookback=lookback)
+
+print (lstm_train[0:5])
 
 nn_y_train = []
 for y in y_train:
@@ -183,6 +193,7 @@ for y in y_train:
 
 nn_y_train = np.array(nn_y_train)
 nn_y_test = []
+
 for y in y_test:
 	if y == 0:
 		nn_y_test.append([1,0])
@@ -190,6 +201,15 @@ for y in y_test:
 		nn_y_test.append([0,1])
 
 nn_y_test = np.array(nn_y_test)
+
+lstm_shape = (len(X_train[0]),lookback)
+lstm_model = build_lstm_model(lstm_shape)
+
+print("Training Model")
+train_pred_model(lstm_model,lstm_train,nn_y_train,lstm_test,nn_y_test,batch_size=1,epochs=5,verbose=2)
+
+
+'''
 
 basic_nn_model = build_pred_model(input_shape=len(X_train[0]))
 
@@ -204,6 +224,7 @@ evaluate_model(trained_nn_model,X_test,nn_y_test)
 
 print(metrics.accuracy_score(nn_y_test, predictions))
 print(metrics.classification_report(nn_y_test, predictions))
+'''
 
 #features_importance = pd.DataFrame(index = features, data={'features importance':clf.feature_importances_})
 #features_importance.plot(kind='bar', figsize=(15,5))
