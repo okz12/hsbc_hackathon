@@ -3,22 +3,22 @@
 import pandas as pd
 import numpy as np
 from scipy import stats
-import matplotlib.pyplot as plt
-import seaborn as sns
-sns.set(style="whitegrid", color_codes=True)
+# import matplotlib.pyplot as plt
+# import seaborn as sns
+# sns.set(style="whitegrid", color_codes=True)
 # %matplotlib inline
 
 pd.options.mode.chained_assignment = None
 pd.options.display.max_columns = 100
 
 def load_data():
-    from_date = '2017.09.15'
-    to_date = '2017.09.30'
-    start_time = '03:00'
-    end_time = '15:00'
+    # from_date = '2017.09.15'
+    # to_date = '2017.09.30'
+    # start_time = '03:00'
+    # end_time = '15:00'
 
-    sym = '`USDINR'
-    site = "`LOH"
+    # sym = '`USDINR'
+    # site = "`LOH"
 
     # load data from csv file (stratpy not available)
     prices_raw = pd.read_csv("./Prices_raw.csv")
@@ -49,8 +49,9 @@ def whiten_data(prices):
     mean_price = np.round(prices['mid'].mean(), 4)
     block_size = 1e6
 
-    # prices[['bid', 'ask', 'bid2', 'ask2', 'bid3', 'ask3', 'mid']] -= mean_price
-    # prices[['bidSize1', 'askSize1', 'bidSize2', 'askSize2', 'bidSize3', 'askSize3']] /= block_size
+    prices[['bid', 'ask', 'bid2', 'ask2', 'bid3', 'ask3', 'mid']] -= mean_price
+    prices[['bidSize1', 'askSize1', 'bidSize2', 'askSize2', 'bidSize3', 'askSize3']] /= block_size
+    
     return prices
 
 ########### Features engineering ########
@@ -65,9 +66,10 @@ def features_engineering(prices):
                                                      + prices['bidSize2']*prices['bid2'] + prices['bidSize3']*prices['bid3'])/(prices['bidSize1']+prices['askSize1']+prices['bidSize2']+prices['askSize2']+prices['bidSize3']+prices['askSize3'])
 
     # trade Features, print,tradeSeq,lastPaid,lastGiven,bidToPaid,bidToGiven,midToPaid ...
-    atomicTrades = prices[['paid','given']].loc[(prices['paid']>1) | (prices['given']>1)] 
-    atomicTrades.loc[atomicTrades['paid'] < 1, 'paid' ] = np.NaN
-    atomicTrades.loc[atomicTrades['given'] < 1, 'given' ] = np.NaN
+    threshold = -60
+    atomicTrades = prices[['paid','given']].loc[(prices['paid']>threshold) | (prices['given']>threshold)] 
+    atomicTrades.loc[atomicTrades['paid'] < threshold, 'paid' ] = np.NaN
+    atomicTrades.loc[atomicTrades['given'] < threshold, 'given' ] = np.NaN
     atomicTrades = atomicTrades.replace(0,np.NaN)
     prices['paid'] = atomicTrades['paid']
     prices['given'] = atomicTrades['given']
@@ -98,17 +100,17 @@ def features_engineering(prices):
 
     # column name over which we build moving averages
     columns = ['bid','ask','bid2','ask2','bidSize1','askSize1','bidSize2','askSize2','mid','spread', 'bp', 'bp_with2']
-    columns = ['bid','ask','bidSize1','askSize1','mid','spread','bp','bp_with2','lastPaid','lastGiven']
+    columns = ['bidSize1','askSize1','mid','spread','bp_with2']
     
     #moving averages over last n rows
-    row_intervals = [1, 5, 10, 20, 80, 320, 1280]
+    row_intervals = [1, 5, 10, 320, 1280]
     for window in row_intervals:
         for feature in columns:
             prices['%s_ma_%d_row' % (feature, window)] = prices[feature].rolling(window, min_periods=1).mean()
             prices['mid_vol_%d_ms' % lookback].ffill()
 
     # moving averages over last n milliseconds
-    time_intervals = [20, 80, 320, 1000, 4000, 16000] 
+    time_intervals = [20, 80, 1000, 16000] 
     for time_window in time_intervals:
         for feature in columns:
             prices['%s_ma_%d_ms' % (feature, time_window)] = prices[feature].rolling('%ds' % time_window, min_periods=1).mean()
@@ -116,7 +118,8 @@ def features_engineering(prices):
     
     # columns over which we'll build delta /deltadelta signals
     for col in ['spread', 'bid', 'ask']:
-        columns.remove(col)
+        if col in columns:
+            columns.remove(col)
     ma_row_columns = ['%s_ma_%d_row' % (feature, window) for feature in columns for window in row_intervals]
     ma_ms_columns = ['%s_ma_%d_ms' % (feature, time_window) for feature in columns for time_window in time_intervals]
     ma_columns = ma_row_columns + ma_ms_columns
@@ -164,14 +167,19 @@ def features_engineering(prices):
     return prices, mid_look_ahead
 
 def split_test_train(prices, dep_var):
-    features = prices.columns
     OUT = (prices.date == '2017.09.29') | (prices.date == '2017.09.28') 
     OUT = OUT | (prices.date == '2017.09.27') 
     IN = ~OUT
 
-    X_train = np.array(prices[IN][features].values)
+
+    X_train = prices[IN]
+    X_train.drop(['date'], 1, inplace = True)
+    X_train = np.array(X_train.values)
     y_train = np.array(dep_var[IN]['nextMidVariation'].values)
-    X_test = np.array(prices[OUT][features].values)
+    
+    X_test = prices[OUT]
+    X_test.drop(['date'], 1, inplace = True)
+    X_test = np.array(X_test.values)
     y_test = np.array(dep_var[OUT]['nextMidVariation'].values)
 
     y_train[y_train<0] = -1
@@ -179,13 +187,13 @@ def split_test_train(prices, dep_var):
     y_test[y_test<0] = -1
     y_test[y_test>0] = 1
 
-    return X_train, y_train, X_test, y_test
+    return X_train, y_train, np.array(dep_var[IN]['nextMidVariation'].values), X_test, y_test, np.array(dep_var[OUT]['nextMidVariation'].values)
 
 if __name__ == '__main__':
     prices_raw = load_data()
     prices = clean_data(prices_raw)
-
-    prices, dep_var = features_engineering(prices)
     prices = whiten_data(prices)
-    split_test_train(prices, dep_var)
+    prices, dep_var = features_engineering(prices)
+    X_train, y_train, X_test, y_test = split_test_train(prices, dep_var)
+    # return X_train, y_train, X_test, y_test
 
