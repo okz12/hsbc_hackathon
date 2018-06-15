@@ -178,7 +178,7 @@ print(metrics.classification_report(y_test, predictions))
 #nn shenanigans
 import build_time_data
 
-lookback = 20
+lookback = 3
 lstm_train = build_time_data.construct_time_series_inputs(X_train,lookback=lookback)
 lstm_test = build_time_data.construct_time_series_inputs(X_test,lookback=lookback)
 
@@ -206,7 +206,7 @@ lstm_shape = (lookback+1,len(X_train[0]))
 lstm_model = build_lstm_model(lstm_shape)
 
 print("Training Model")
-train_pred_model(lstm_model,lstm_train[lookback:],nn_y_train[lookback:],lstm_test[lookback:],nn_y_test[lookback:],batch_size=1,epochs=5,verbose=1)
+train_pred_model(lstm_model,lstm_train[lookback:],nn_y_train[lookback:],lstm_test[lookback:],nn_y_test[lookback:],batch_size=32,epochs=5,verbose=1)
 
 evaluate_model(lstm_model,lstm_test[lookback:],nn_y_test[lookback:])
 '''

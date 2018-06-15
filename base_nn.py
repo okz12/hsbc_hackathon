@@ -38,7 +38,10 @@ def build_lstm_model(input_shape):
 	model.add(LSTM(16, activation='tanh', input_shape=input_shape))
 	model.add(Dense(8, activation='relu'))
 	model.add(Dense(2,activation='softmax'))
-	model.compile(loss='categorical_crossentropy', optimizer='adam')
+	#model.compile(loss='categorical_crossentropy', optimizer='adam')
+	model.compile(loss=keras.losses.categorical_crossentropy,
+				  optimizer=keras.optimizers.Adam(),
+				  metrics=['accuracy'])
 
 	return model
 
@@ -46,8 +49,8 @@ def train_pred_model(model, x_train, y_train, x_test, y_test, batch_size=128, ep
 	model.fit(x_train, y_train,
 			  batch_size=batch_size,
 			  epochs=epochs,
-			  verbose=verbose)
-			  #validation_data=(x_test, y_test))
+			  verbose=verbose,
+			  validation_data=(x_test, y_test))
 	return model
 
 def evaluate_model(model,cnn_x_test,cnn_y_test,verbose=1):
