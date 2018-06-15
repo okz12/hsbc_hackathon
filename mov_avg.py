@@ -139,35 +139,53 @@ def features_engineering(prices):
     for l in LLL:
         prices.drop(l,1,inplace=True)
 
+    old_n_rows = prices.shape[0]
+    prices.dropna(inplace=True)
+    print 'Dropped %d out of %d rows containing NaNs' % (old_n_rows - prices.shape[0], old_n_rows)
+    old_n_rows = prices.shape[0]
+    prices = prices[(np.abs(stats.zscore(prices['delta_mid'])) < 5)]
+    print 'Dropped %d out of %d rows with extreme z-score' % (old_n_rows - prices.shape[0], old_n_rows)
 
-    # EOD, BOD
-
+    ######### create feature to learn, ie next move (not to be used as covariates!)
+    prices['midDiff'] = prices['mid'].diff()
+    prices['nextMidDiff'] = prices['midDiff'].shift(-1)
+    prices['nextMidVariation'] = prices['nextMidDiff'].replace(to_replace=0, method='bfill')
+    # drop nans again (there may be new nan's in nextMidVariation?)
     old_n_rows = prices.shape[0]
     prices.dropna(inplace=True)
     print 'Dropped %d out of %d rows containing NaNs' % (old_n_rows - prices.shape[0], old_n_rows)
 
-    return prices
+    mid_look_ahead = prices[['nextMidVariation']]
+    # drop variables which should not be used as covariates
+    prices.drop(['midDiff'], 1, inplace = True)
+    prices.drop(['nextMidDiff'], 1, inplace = True)
+    prices.drop(['nextMidVariation'], 1, inplace = True)
 
-def feature_to_learn(prices):
-    ######### create feature to learn, ie next move (not to be used as covariates!)
-    mid_look_ahead = prices.copy(deep = True)
-    mid_look_ahead['midDiff'] = mid_look_ahead['mid'].diff()
-    mid_look_ahead['nextMidDiff'] = mid_look_ahead['midDiff'].shift(-1)
-    mid_look_ahead['nextMidVariation'] = mid_look_ahead['nextMidDiff'].replace(to_replace=0, method='bfill')
-    mid_look_ahead = mid_look_ahead[['nextMidVariation']]
+    return prices, mid_look_ahead
 
-    # prices = prices.replace(np.NaN,0)
-    # prices_clean = prices[(np.abs(stats.zscore(prices['deltaMid'])) < 5)]
-    # prices_clean = prices_clean.replace(0,np.NaN)
-    # prices_clean = prices_clean.replace(np.NaN,0)
-    return mid_look_ahead
+def split_test_train(prices, dep_var):
+    features = prices.columns
+    OUT = (prices.date == '2017.09.29') | (prices.date == '2017.09.28') 
+    OUT = OUT | (prices.date == '2017.09.27') 
+    IN = ~OUT
+
+    X_train = np.array(prices[IN][features].values)
+    y_train = np.array(dep_var[IN]['nextMidVariation'].values)
+    X_test = np.array(prices[OUT][features].values)
+    y_test = np.array(dep_var[OUT]['nextMidVariation'].values)
+
+    y_train[y_train<0] = -1
+    y_train[y_train>0] = 1
+    y_test[y_test<0] = -1
+    y_test[y_test>0] = 1
+
+    return X_train, y_train, X_test, y_test
 
 if __name__ == '__main__':
     prices_raw = load_data()
     prices = clean_data(prices_raw)
-    to_learn = feature_to_learn(prices)
-    
-    prices = features_engineering(prices)
+
+    prices, dep_var = features_engineering(prices)
     prices = whiten_data(prices)
-    print to_learn
+    split_test_train(prices, dep_var)
 
