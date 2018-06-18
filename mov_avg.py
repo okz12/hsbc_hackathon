@@ -4,7 +4,7 @@ from scipy import stats
 import matplotlib.pyplot as plt
 import seaborn as sns
 sns.set(style="whitegrid", color_codes=True)
-from sklearn import linear_model, svm, kernel_ridge
+from sklearn import linear_model, svm, kernel_ridge, kernel_approximation
 
 pd.options.mode.chained_assignment = None
 pd.options.display.max_columns = 100
@@ -63,8 +63,7 @@ def features_engineering(prices):
                                                      + prices['askSize2']*prices['ask2'] + prices['askSize3']*prices['ask3']
                                                      + prices['bidSize2']*prices['bid2'] + prices['bidSize3']*prices['bid3'])/(prices['bidSize1']+prices['askSize1']+prices['bidSize2']+prices['askSize2']+prices['bidSize3']+prices['askSize3'])
 
-    """
-    trade Features, print,tradeSeq,lastPaid,lastGiven,bidToPaid,bidToGiven,midToPaid ...
+    # trade Features, print,tradeSeq,lastPaid,lastGiven,bidToPaid,bidToGiven,midToPaid ...
     threshold = -60
     atomicTrades = prices[['paid','given']].loc[(prices['paid']>threshold) | (prices['given']>threshold)]
     atomicTrades.loc[atomicTrades['paid'] < threshold, 'paid' ] = np.NaN
@@ -84,8 +83,7 @@ def features_engineering(prices):
     prices['bidToGiven'] = prices['bid'] - prices['lastGiven']
     prices['askToPaid'] = prices['ask'] - prices['lastPaid']
     prices['askToGiven'] = prices['ask'] - prices['lastGiven']
-    """
-
+    
     prices['weekday'] = prices.index.weekday
     
     # volatility
@@ -191,8 +189,8 @@ def classif_correct_rate(estim, truth):
     return 1.0 - np.linalg.norm(np.sign(estim) - truth, ord = 1) / (2 * estim.shape[0])
 
 def print_statistics(y_train, y_test):
-    print('train: +1: %.3f, -1: %.3f' % (np.sum(y_train[y_train > 0]) / y_train.shape[0], np.sum(y_train[y_train < 0]) / y_train.shape[0]))
-    print('test:  +1: %.3f, -1: %.3f' % (np.sum(y_test[y_test > 0]) / y_test.shape[0], np.sum(y_test[y_test < 0]) / y_test.shape[0]))
+    print('train: %d instances\t+1: %.3f, -1: %.3f' % (y_train.shape[0], np.sum(y_train[y_train > 0]) / y_train.shape[0], np.sum(y_train[y_train < 0]) / y_train.shape[0]))
+    print('test:  %d instances\t+1: %.3f, -1: %.3f' % (y_test.shape[0],  np.sum(y_test[y_test > 0]) / y_test.shape[0],    np.sum(y_test[y_test < 0]) / y_test.shape[0]))
 
 if __name__ == '__main__':
     prices_raw = load_data()
@@ -205,8 +203,7 @@ if __name__ == '__main__':
     
     # print 'alpha\ttrain error\ttrain rate\ttest rate'
     # for alpha in np.logspace(-4, 1, 90):
-    #     # reg = linear_model.Ridge(alpha = alpha, max_iter = 1e5, normalize = True, tol = 1e-8) # alpha = 1.23
-    #     # reg = linear_model.ARDRegression(alpha_1 = alpha, alpha_2 = alpha, lambda_1 = alpha, lambda_2 = alpha, normalize = True, tol = 1e-8) # alpha = 0.340
+    #     reg = linear_model.Ridge(alpha = alpha, max_iter = 1e5, normalize = True, tol = 1e-8) # alpha = 1.23
     #     reg.fit(X_train, y_train_value)
     #     print '%.4f\t%.3f\t\t%.3f\t\t%.3f' % (alpha, \
     #         np.linalg.norm(reg.predict(X_train) - y_train_value), \
@@ -214,15 +211,19 @@ if __name__ == '__main__':
     #         classif_correct_rate(reg.predict(X_test), y_test))
 
     # print 'alpha\t\tgamma\t\ttrain error\ttrain rate\ttest rate'
-    # for alpha in np.logspace(-6, 1, 8):
-    #     for gamma in np.logspace(-8, -4, 5):            
-    #         reg = kernel_ridge.KernelRidge(alpha = alpha, kernel = 'rbf', gamma = gamma)
-    #         reg.fit(X_train, y_train_value)
+    # for alpha in np.logspace(-4, 1, 6):
+    #     for gamma in np.logspace(-15, -10, 5):            
+    #         rbf_feature = kernel_approximation.RBFSampler(gamma = gamma, n_components = 1000, random_state = 0)
+    #         PhiX_train = rbf_feature.fit_transform(X_train)
+    #         PhiX_test = rbf_feature.fit_transform(X_test)
+    #         reg = linear_model.SGDRegressor(alpha = alpha, max_iter = 1e5, tol = 1e-8)
+    #         reg.fit(PhiX_train, y_train_value)
+    #         # clf = linear_model.SGDClassifier(alpha = alpha, random_state = 0)
+    #         # clf.fit(PhiX_train, y_train)
     #         print '%.3Ef\t%.3Ef\t%.3f\t\t%.3f\t\t%.3f' % (alpha, gamma, \
-    #             np.linalg.norm(reg.predict(X_train) - y_train_value), \
-    #             classif_correct_rate(reg.predict(X_train), y_train), \
-    #             classif_correct_rate(reg.predict(X_test), y_test))
-
+    #             np.linalg.norm(reg.predict(PhiX_train) - y_train_value), \
+    #             classif_correct_rate(reg.predict(PhiX_train), y_train), \
+    #             classif_correct_rate(reg.predict(PhiX_test), y_test))
 
     # for C in np.linspace(0.1, 2, 20):
     #     clf = svm.SVC(C = C, kernel = 'rbf', tol = 1e-6)
@@ -231,22 +232,38 @@ if __name__ == '__main__':
     #         classif_correct_rate(clf.predict(X_train), ( y_train + 1.0 ) / 2.0), \
     #         classif_correct_rate(clf.predict(X_test), ( y_test + 1.0 ) / 2.0))
 
-    ARDRreg = linear_model.ARDRegression(alpha_1 = 0.34, alpha_2 = 0.34, lambda_1 = 0.34, lambda_2 = 0.34, normalize = True, tol = 1e-8)
-    ARDRreg.fit(X_train, y_train_value)
-    lin_ridge_reg = linear_model.Ridge(alpha = 1.23, max_iter = 1e5, normalize = True, tol = 1e-8)
+    lin_ridge_reg = linear_model.Ridge(alpha = 0.2, max_iter = 1e5, normalize = True, tol = 1e-8)
     lin_ridge_reg.fit(X_train, y_train_value)
-    # SVCclf = svm.SVC(C = 1.0, kernel = 'rbf', probability = True, tol = 1e-8)
-    # SVCclf.fit(X_train, ( y_train + 1.0 ) / 2.0)
-    KRRreg = kernel_ridge.KernelRidge(alpha = 1e-1, kernel = 'rbf', gamma = 1e-6)
-    KRRreg.fit(X_train, y_train_value)
+    y_lin_ridge_reg_test = lin_ridge_reg.predict(X_test)
+    y_lin_ridge_reg_train = lin_ridge_reg.predict(X_train)
 
-    y_ARDRreg = ARDRreg.predict(X_test)
-    y_lin_ridge_reg = lin_ridge_reg.predict(X_test)
-    # y_SVCclf = (SVCclf.predict(X_test) * 2.0 - 1.0)
-    y_KRRreg = KRRreg.predict(X_test)
-    y_ensemble = (y_ARDRreg + y_lin_ridge_reg + y_KRRreg) / 3
-    print classif_correct_rate(y_ARDRreg, y_test), \
-        classif_correct_rate(y_lin_ridge_reg, y_test), \
-        classif_correct_rate(y_KRRreg, y_test), \
-        classif_correct_rate(y_ensemble, y_test)
+    rbf_feature = kernel_approximation.RBFSampler(gamma = 1e-11, n_components = 1000, random_state = 0)
+    PhiX_train = rbf_feature.fit_transform(X_train)
+    PhiX_test = rbf_feature.fit_transform(X_test)
+    RFF_lin_ridge_reg = linear_model.Ridge(alpha = 1e-2, max_iter = 1e5, normalize = True, tol = 1e-8)
+    RFF_lin_ridge_reg.fit(PhiX_train, y_train)
+    y_RFF_train = RFF_lin_ridge_reg.predict(PhiX_train)
+    y_RFF_test = RFF_lin_ridge_reg.predict(PhiX_test)
 
+    # ARDRreg = linear_model.ARDRegression(alpha_1 = 0.34, alpha_2 = 0.34, lambda_1 = 0.34, lambda_2 = 0.34, normalize = True, tol = 1e-8)
+    # ARDRreg.fit(X_train, y_train_value)
+    # y_ARDRreg_test = ARDRreg.predict(X_test)
+    # y_ARDRreg_train = ARDRreg.predict(X_train)
+    # KRRreg = kernel_ridge.KernelRidge(alpha = 1e-1, kernel = 'rbf', gamma = 1e-6)
+    # KRRreg.fit(X_train, y_train_value)
+    # y_KRRreg_test = KRRreg.predict(X_test)
+    # y_KRRreg_train = KRRreg.predict(X_train)
+
+    y_ensemble_test =  (y_RFF_test  + y_lin_ridge_reg_test) / 2
+    y_ensemble_train = (y_RFF_train + y_lin_ridge_reg_train) / 2
+    classif_rates = {}
+    classif_rates['Linear ridge reg.'] = [classif_correct_rate(y_lin_ridge_reg_test, y_test), classif_correct_rate(y_lin_ridge_reg_train, y_train)]
+    classif_rates['RFF ridge reg.\t'] = [classif_correct_rate(y_RFF_test, y_test), classif_correct_rate(y_RFF_train, y_train)]
+    # classif_rates['ARDR linear reg.'] = [classif_correct_rate(y_ARDRreg_test, y_test), classif_correct_rate(y_ARDRreg_train, y_train)]
+    # classif_rates['Kernel ridge reg.'] = [classif_correct_rate(y_KRRreg_test, y_test), classif_correct_rate(y_KRRreg_train, y_train)]
+    print y_ensemble_test, y_ensemble_train
+    classif_rates['Ensemble\t'] = [classif_correct_rate(y_ensemble_test, y_test), classif_correct_rate(y_ensemble_train, y_train)]
+    
+    print 'Classif. rate\t\ttrain\t\ttest'
+    for algo_name in classif_rates:
+        print('%s\t%.3f\t\t%.3f' % (algo_name, classif_rates[algo_name][1], classif_rates[algo_name][0]))
