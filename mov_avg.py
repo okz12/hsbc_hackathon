@@ -189,7 +189,7 @@ if __name__ == '__main__':
     prices = clean_data(prices_raw)
     prices = whiten_data(prices)
     prices, dep_var = features_engineering(prices)
-    X_train, y_train, y_train_value, X_test, y_test, y_test_value, cols = split_test_train(prices, dep_var)
+    X_train, y_train, y_train_value, X_test, y_test, y_test_value = split_test_train(prices, dep_var)
 
     print classif_correct_rate(y_test[1:], y_test[:-1])
 
