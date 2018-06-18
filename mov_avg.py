@@ -191,8 +191,6 @@ if __name__ == '__main__':
     prices, dep_var = features_engineering(prices)
     X_train, y_train, y_train_value, X_test, y_test, y_test_value = split_test_train(prices, dep_var)
 
-    print classif_correct_rate(y_test[1:], y_test[:-1])
-
     print_statistics(y_train, y_test)
 
     lin_ridge_reg = linear_model.Ridge(alpha = 0.2, max_iter = 1e5, normalize = True, tol = 1e-8)
