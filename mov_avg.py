@@ -10,14 +10,6 @@ pd.options.mode.chained_assignment = None
 pd.options.display.max_columns = 100
 
 def load_data():
-    # from_date = '2017.09.15'
-    # to_date = '2017.09.30'
-    # start_time = '03:00'
-    # end_time = '15:00'
-
-    # sym = '`USDINR'
-    # site = "`LOH"
-
     # load data from csv file (stratpy not available)
     prices_raw = pd.read_csv("./Prices_raw.csv")
 
@@ -156,7 +148,7 @@ def features_engineering(prices):
 
     mid_look_ahead = prices[['nextMidVariation']]
     # drop variables which should not be used as covariates
-    prices.drop(['midDiff'], 1, inplace = True)
+    # prices.drop(['midDiff'], 1, inplace = True) # does not need to be dropped since observed at time t
     prices.drop(['nextMidDiff'], 1, inplace = True)
     prices.drop(['nextMidVariation'], 1, inplace = True)
 
@@ -197,40 +189,11 @@ if __name__ == '__main__':
     prices = clean_data(prices_raw)
     prices = whiten_data(prices)
     prices, dep_var = features_engineering(prices)
-    X_train, y_train, y_train_value, X_test, y_test, y_test_value = split_test_train(prices, dep_var)
+    X_train, y_train, y_train_value, X_test, y_test, y_test_value, cols = split_test_train(prices, dep_var)
+
+    print classif_correct_rate(y_test[1:], y_test[:-1])
 
     print_statistics(y_train, y_test)
-    
-    # print 'alpha\ttrain error\ttrain rate\ttest rate'
-    # for alpha in np.logspace(-4, 1, 90):
-    #     reg = linear_model.Ridge(alpha = alpha, max_iter = 1e5, normalize = True, tol = 1e-8) # alpha = 1.23
-    #     reg.fit(X_train, y_train_value)
-    #     print '%.4f\t%.3f\t\t%.3f\t\t%.3f' % (alpha, \
-    #         np.linalg.norm(reg.predict(X_train) - y_train_value), \
-    #         classif_correct_rate(reg.predict(X_train), y_train), \
-    #         classif_correct_rate(reg.predict(X_test), y_test))
-
-    # print 'alpha\t\tgamma\t\ttrain error\ttrain rate\ttest rate'
-    # for alpha in np.logspace(-4, 1, 6):
-    #     for gamma in np.logspace(-15, -10, 5):            
-    #         rbf_feature = kernel_approximation.RBFSampler(gamma = gamma, n_components = 1000, random_state = 0)
-    #         PhiX_train = rbf_feature.fit_transform(X_train)
-    #         PhiX_test = rbf_feature.fit_transform(X_test)
-    #         reg = linear_model.SGDRegressor(alpha = alpha, max_iter = 1e5, tol = 1e-8)
-    #         reg.fit(PhiX_train, y_train_value)
-    #         # clf = linear_model.SGDClassifier(alpha = alpha, random_state = 0)
-    #         # clf.fit(PhiX_train, y_train)
-    #         print '%.3Ef\t%.3Ef\t%.3f\t\t%.3f\t\t%.3f' % (alpha, gamma, \
-    #             np.linalg.norm(reg.predict(PhiX_train) - y_train_value), \
-    #             classif_correct_rate(reg.predict(PhiX_train), y_train), \
-    #             classif_correct_rate(reg.predict(PhiX_test), y_test))
-
-    # for C in np.linspace(0.1, 2, 20):
-    #     clf = svm.SVC(C = C, kernel = 'rbf', tol = 1e-6)
-    #     clf.fit(X_train, ( y_train + 1.0 ) / 2.0)
-    #     print '%.4f\t\t%.3f\t\t%.3f' % (C, \
-    #         classif_correct_rate(clf.predict(X_train), ( y_train + 1.0 ) / 2.0), \
-    #         classif_correct_rate(clf.predict(X_test), ( y_test + 1.0 ) / 2.0))
 
     lin_ridge_reg = linear_model.Ridge(alpha = 0.2, max_iter = 1e5, normalize = True, tol = 1e-8)
     lin_ridge_reg.fit(X_train, y_train_value)
@@ -245,23 +208,12 @@ if __name__ == '__main__':
     y_RFF_train = RFF_lin_ridge_reg.predict(PhiX_train)
     y_RFF_test = RFF_lin_ridge_reg.predict(PhiX_test)
 
-    # ARDRreg = linear_model.ARDRegression(alpha_1 = 0.34, alpha_2 = 0.34, lambda_1 = 0.34, lambda_2 = 0.34, normalize = True, tol = 1e-8)
-    # ARDRreg.fit(X_train, y_train_value)
-    # y_ARDRreg_test = ARDRreg.predict(X_test)
-    # y_ARDRreg_train = ARDRreg.predict(X_train)
-    # KRRreg = kernel_ridge.KernelRidge(alpha = 1e-1, kernel = 'rbf', gamma = 1e-6)
-    # KRRreg.fit(X_train, y_train_value)
-    # y_KRRreg_test = KRRreg.predict(X_test)
-    # y_KRRreg_train = KRRreg.predict(X_train)
+    y_ensemble_test =  y_RFF_test  + y_lin_ridge_reg_test
+    y_ensemble_train = y_RFF_train + y_lin_ridge_reg_train
 
-    y_ensemble_test =  (y_RFF_test  + y_lin_ridge_reg_test) / 2
-    y_ensemble_train = (y_RFF_train + y_lin_ridge_reg_train) / 2
     classif_rates = {}
     classif_rates['Linear ridge reg.'] = [classif_correct_rate(y_lin_ridge_reg_test, y_test), classif_correct_rate(y_lin_ridge_reg_train, y_train)]
     classif_rates['RFF ridge reg.\t'] = [classif_correct_rate(y_RFF_test, y_test), classif_correct_rate(y_RFF_train, y_train)]
-    # classif_rates['ARDR linear reg.'] = [classif_correct_rate(y_ARDRreg_test, y_test), classif_correct_rate(y_ARDRreg_train, y_train)]
-    # classif_rates['Kernel ridge reg.'] = [classif_correct_rate(y_KRRreg_test, y_test), classif_correct_rate(y_KRRreg_train, y_train)]
-    print y_ensemble_test, y_ensemble_train
     classif_rates['Ensemble\t'] = [classif_correct_rate(y_ensemble_test, y_test), classif_correct_rate(y_ensemble_train, y_train)]
     
     print 'Classif. rate\t\ttrain\t\ttest'
