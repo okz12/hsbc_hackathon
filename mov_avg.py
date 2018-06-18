@@ -20,15 +20,15 @@ def load_data():
     return prices_raw
 
 def clean_data(prices_raw):
-    prices = prices_raw[['date','bid','ask','bid2','ask2','bid3','ask3','bidSize1','askSize1','bidSize2','askSize2','bidSize3','askSize3','paid', 'given']]
+    prices = prices_raw[['date','bid','ask','bid2','ask2','bid3','ask3','bidSize1','askSize1','bidSize2','askSize2','bidSize3','askSize3']]
 
     prices['bid'] = prices['bid'].replace(0,np.NaN)
     prices['ask'] = prices['ask'].replace(0,np.NaN)
     prices['bid2'] = prices['bid2'].replace(0,np.NaN)
     prices['ask2'] = prices['ask2'].replace(0,np.NaN)
 
-    prices['paid'] = prices['paid'].replace(0,np.NaN)
-    prices['given'] = prices['given'].replace(0,np.NaN)
+    # prices['paid'] = prices['paid'].replace(0,np.NaN)
+    # prices['given'] = prices['given'].replace(0,np.NaN)
     prices['mid'] = 0.5*(prices['bid'] + prices['ask'])
     prices.index = prices_raw.feedHandlerReceiveTime
 
@@ -54,27 +54,7 @@ def features_engineering(prices):
     prices['bp_with2'] = prices['mid'] - (prices['bidSize1']*prices['bid'] + prices['askSize1']*prices['ask']
                                                      + prices['askSize2']*prices['ask2'] + prices['askSize3']*prices['ask3']
                                                      + prices['bidSize2']*prices['bid2'] + prices['bidSize3']*prices['bid3'])/(prices['bidSize1']+prices['askSize1']+prices['bidSize2']+prices['askSize2']+prices['bidSize3']+prices['askSize3'])
-
-    # trade Features, print,tradeSeq,lastPaid,lastGiven,bidToPaid,bidToGiven,midToPaid ...
-    threshold = -60
-    atomicTrades = prices[['paid','given']].loc[(prices['paid']>threshold) | (prices['given']>threshold)]
-    atomicTrades.loc[atomicTrades['paid'] < threshold, 'paid' ] = np.NaN
-    atomicTrades.loc[atomicTrades['given'] < threshold, 'given' ] = np.NaN
-    atomicTrades = atomicTrades.replace(0,np.NaN)
-    prices['paid'] = atomicTrades['paid']
-    prices['given'] = atomicTrades['given']
-    prices['print'] = np.where((prices['paid']>1) | (prices['given']>1),1,0)
-    prices['tradeSeq'] = prices['print'].cumsum()
-    prices['lastPaid'] = prices['paid'].ffill()
-    prices['lastGiven'] = prices['given'].ffill()
-    prices.drop('paid',1,inplace=True)
-    prices.drop('given',1,inplace=True)
-    prices['midToPaid'] = prices['mid'] - prices['lastPaid']
-    prices['midToGiven'] = prices['mid'] - prices['lastGiven']
-    prices['bidToPaid'] = prices['bid'] - prices['lastPaid']
-    prices['bidToGiven'] = prices['bid'] - prices['lastGiven']
-    prices['askToPaid'] = prices['ask'] - prices['lastPaid']
-    prices['askToGiven'] = prices['ask'] - prices['lastGiven']
+    
     
     prices['weekday'] = prices.index.weekday
     
@@ -85,18 +65,17 @@ def features_engineering(prices):
         prices['mid_vol_%d_ms' % lookback].ffill()
 
     # column name over which we build moving averages
-    columns = ['bid','ask','bid2','ask2','bidSize1','askSize1','bidSize2','askSize2','mid','spread', 'bp', 'bp_with2']
-    columns = ['bidSize1','askSize1','mid','spread','bp_with2']
+    columns = ['bidSize1','askSize1','mid','bp_with2']
     
     #moving averages over last n rows
-    row_intervals = [1, 5, 10, 320, 1280]
+    row_intervals = [2, 5, 10, 320, 1280]
     for window in row_intervals:
         for feature in columns:
             prices['%s_ma_%d_row' % (feature, window)] = prices[feature].rolling(window, min_periods=1).mean()
             prices['mid_vol_%d_ms' % lookback].ffill()
 
     # moving averages over last n milliseconds
-    time_intervals = [20, 80, 1000, 16000] 
+    time_intervals = [20, 80, 400, 1000, 16000] 
     for time_window in time_intervals:
         for feature in columns:
             prices['%s_ma_%d_ms' % (feature, time_window)] = prices[feature].rolling('%ds' % time_window, min_periods=1).mean()
@@ -122,13 +101,6 @@ def features_engineering(prices):
     prices = prices.iloc[2:]
 
     prices['mid_diff_interval'] = (prices['delta_mid'] != 0).cumsum()
-
-    """
-    # drop some features
-    LLL = []
-    for l in LLL:
-        prices.drop(l,1,inplace=True)
-    """
 
     old_n_rows = prices.shape[0]
     prices.dropna(inplace=True)
@@ -162,6 +134,7 @@ def split_test_train(prices, dep_var):
 
     X_train = prices[IN]
     X_train.drop(['date'], 1, inplace = True) # drop the date in order to keep a multivariate input
+    cols = list(X_train.columns)
     X_train = np.array(X_train.values)
     y_train = np.array(dep_var[IN]['nextMidVariation'].values)
     
@@ -175,7 +148,7 @@ def split_test_train(prices, dep_var):
     y_test[y_test<0] = -1
     y_test[y_test>0] = 1
 
-    return X_train, y_train, np.array(dep_var[IN]['nextMidVariation'].values), X_test, y_test, np.array(dep_var[OUT]['nextMidVariation'].values)
+    return X_train, y_train, np.array(dep_var[IN]['nextMidVariation'].values), X_test, y_test, np.array(dep_var[OUT]['nextMidVariation'].values), cols
 
 def classif_correct_rate(estim, truth):
     return 1.0 - np.linalg.norm(np.sign(estim) - truth, ord = 1) / (2 * estim.shape[0])
@@ -189,9 +162,13 @@ if __name__ == '__main__':
     prices = clean_data(prices_raw)
     prices = whiten_data(prices)
     prices, dep_var = features_engineering(prices)
-    X_train, y_train, y_train_value, X_test, y_test, y_test_value = split_test_train(prices, dep_var)
-
+    X_train, y_train, y_train_value, X_test, y_test, y_test_value, cols = split_test_train(prices, dep_var)
+    
     print_statistics(y_train, y_test)
+
+    # First estimator: assume that after an up day there comes a down day
+    y_MR_train = -X_train[:, cols.index('midDiff')]
+    y_MR_test = -X_test[:, cols.index('midDiff')]
 
     lin_ridge_reg = linear_model.Ridge(alpha = 0.2, max_iter = 1e5, normalize = True, tol = 1e-8)
     lin_ridge_reg.fit(X_train, y_train_value)
@@ -206,12 +183,16 @@ if __name__ == '__main__':
     y_RFF_train = RFF_lin_ridge_reg.predict(PhiX_train)
     y_RFF_test = RFF_lin_ridge_reg.predict(PhiX_test)
 
-    y_ensemble_test =  y_RFF_test  + y_lin_ridge_reg_test
-    y_ensemble_train = y_RFF_train + y_lin_ridge_reg_train
+    y_ensemble_test =  np.sign(y_RFF_test) + np.sign(y_lin_ridge_reg_test)
+    y_ensemble_train = np.sign(y_RFF_train) + np.sign(y_lin_ridge_reg_train)
+
+    y_ensemble_train[y_ensemble_train == 0] = np.sign(y_MR_train[y_ensemble_train == 0])
+    y_ensemble_test[y_ensemble_test == 0] = np.sign(y_MR_test[y_ensemble_test == 0])
 
     classif_rates = {}
     classif_rates['Linear ridge reg.'] = [classif_correct_rate(y_lin_ridge_reg_test, y_test), classif_correct_rate(y_lin_ridge_reg_train, y_train)]
     classif_rates['RFF ridge reg.\t'] = [classif_correct_rate(y_RFF_test, y_test), classif_correct_rate(y_RFF_train, y_train)]
+    classif_rates['Mean reverting\t'] = [classif_correct_rate(y_MR_test, y_test), classif_correct_rate(y_MR_train, y_train)]
     classif_rates['Ensemble\t'] = [classif_correct_rate(y_ensemble_test, y_test), classif_correct_rate(y_ensemble_train, y_train)]
     
     print 'Classif. rate\t\ttrain\t\ttest'
